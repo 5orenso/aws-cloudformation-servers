@@ -1,0 +1,251 @@
+{
+    "Parameters": {
+        "baseAmiId": {
+            "Description": "AMI ID",
+            "Type": "AWS::EC2::Image::Id"
+        },
+        "baseInstanceType": {
+            "Description": "Base LaunchConfiguration instance type",
+            "Type": "String"
+        },
+        "baseUserdataRepo": {
+            "Description": "Base LaunchConfiguration Userdata github repo",
+            "Type": "String"
+        },
+
+        "baseAutoscalingGroupMin": {
+            "Description": "Base AutoscalingGroup Min number of servers.",
+            "Type": "String"
+        },
+        "baseAutoscalingGroupMax": {
+            "Description": "Base AutoscalingGroup Max number of servers.",
+            "Type": "String"
+        },
+        "baseAutoscalingGroupDesired": {
+            "Description": "Base AutoscalingGroup Desired number of servers.",
+            "Type": "String"
+        },
+
+        "baseGitRepoConfig": {
+            "Description": "Base Config github repo",
+            "Type": "String"
+        },
+        "baseGitRepoZuCMS": {
+            "Description": "Base Zu CMS github repo",
+            "Type": "String"
+        },
+        "baseGitRepoNodeServer": {
+            "Description": "Base Node.js server github repo",
+            "Type": "String"
+        }
+    },
+    "Resources" : {
+        "baseIam": {
+            "Type": "AWS::IAM::Role",
+            "Properties": {
+                "RoleName": "base-iam",
+                "AssumeRolePolicyDocument": {
+                    "Version" : "2012-10-17",
+                    "Statement": [
+                        {
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": [
+                                    "ec2.amazonaws.com"
+                                ]
+                            },
+                            "Action": [
+                                "sts:AssumeRole"
+                            ]
+                        }
+                    ]
+                },
+                "Policies": [
+                    {
+                        "PolicyName": "baseFullAccessToEC2",
+                        "PolicyDocument": {
+                          "Version": "2012-10-17",
+                          "Statement": [
+                            {
+                              "Action": "ec2:*",
+                              "Effect": "Allow",
+                              "Resource": "*"
+                            },
+                            {
+                              "Effect": "Allow",
+                              "Action": "elasticloadbalancing:*",
+                              "Resource": "*"
+                            },
+                            {
+                              "Effect": "Allow",
+                              "Action": "cloudwatch:*",
+                              "Resource": "*"
+                            },
+                            {
+                              "Effect": "Allow",
+                              "Action": "autoscaling:*",
+                              "Resource": "*"
+                            }
+                          ]
+                        }
+                    },
+                    {
+                        "PolicyName": "baseFullAccessToS3",
+                        "PolicyDocument": {
+                          "Version": "2012-10-17",
+                          "Statement": [
+                            {
+                              "Effect": "Allow",
+                              "Action": "s3:*",
+                              "Resource": "*"
+                            }
+                          ]
+                        }
+                    },
+                    {
+                        "PolicyName": "baseFullAccessToSES",
+                        "PolicyDocument": {
+                          "Version": "2012-10-17",
+                          "Statement": [
+                            {
+                              "Effect": "Allow",
+                              "Action": "ses:*",
+                              "Resource": "*"
+                            }
+                          ]
+                        }
+                    }
+                ]
+            }
+        },
+
+        "baseIamInstanceProfile": {
+            "Type": "AWS::IAM::InstanceProfile",
+            "Properties": {
+                "Path": "/base/",
+                "Roles": [
+                    {
+                        "Ref": "baseIam"
+                    }
+                ]
+            }
+        },
+
+        "baseElb" : {
+            "Type" : "AWS::ElasticLoadBalancing::LoadBalancer",
+            "Properties" : {
+                "LoadBalancerName": "baseElb",
+                "CrossZone": "true",
+                "Subnets": [
+                    { "Fn::ImportValue" : "baseSubnetA" },
+                    { "Fn::ImportValue" : "baseSubnetB" },
+                    { "Fn::ImportValue" : "baseSubnetC" }
+                ],
+                "SecurityGroups": [{ "Fn::ImportValue": "baseSecurityGroup" }],
+                "Listeners": [
+                    {
+                        "LoadBalancerPort": "80",
+                        "InstancePort": "8000",
+                        "Protocol": "HTTP"
+                    },
+                    {
+                        "LoadBalancerPort": "1337",
+                        "Protocol": "SSL",
+                        "InstancePort": "1337",
+                        "InstanceProtocol": "TCP",
+                        "SSLCertificateId": "arn:aws:acm:eu-west-1:943362861152:certificate/e3a9dade-1685-4f83-baa6-bfb9b734101c"
+                    }
+                ],
+                "HealthCheck": {
+                    "Target": "HTTP:8000/ip",
+                    "HealthyThreshold": "2",
+                    "UnhealthyThreshold": "2",
+                    "Interval": "30",
+                    "Timeout": "5"
+                },
+                "ConnectionDrainingPolicy" : {
+                    "Enabled" : "true",
+                    "Timeout" : 60
+                },
+                "ConnectionSettings" : {
+                    "IdleTimeout" : 60
+                }
+            }
+        },
+
+        "baseLaunchConfig": {
+            "Type" : "AWS::AutoScaling::LaunchConfiguration",
+            "Properties" : {
+                "ImageId": { "Ref": "baseAmiId" },
+                "InstanceType" : { "Ref" : "baseInstanceType" },
+                "KeyName": "eu_webserver",
+                "AssociatePublicIpAddress": "true",
+                "SecurityGroups": [{ "Fn::ImportValue": "baseSecurityGroup" }],
+                "IamInstanceProfile": { "Ref" : "baseIamInstanceProfile" },
+                "InstanceMonitoring": "true",
+                "UserData": {
+                    "Fn::Base64": {
+                        "Fn::Join": [
+                            "",
+                            [
+                                "#!/bin/bash\n",
+                                "export GIT_REPO_CONFIG=", { "Ref": "baseGitRepoConfig" },"\n",
+                                "export GIT_REPO_NODE_SERVER=", { "Ref": "baseGitRepoNodeServer" },"\n",
+                                "\n",
+                                "# Fetch the file, make it runnable, run it and remove it.\n",
+                                "curl -o ./server-boot.sh ", { "Ref": "baseUserdataRepo" },"\n",
+                                "chmod u+x ./server-boot.sh\n",
+                                "bash ./server-boot.sh\n",
+                                "rm ./server-boot.sh\n"
+                            ]
+                        ]
+                    }
+                }
+            }
+        },
+
+        "baseAutoScalingGroup": {
+            "Type" : "AWS::AutoScaling::AutoScalingGroup",
+            "DependsOn": ["baseElb", "baseLaunchConfig"],
+            "Properties": {
+                "VPCZoneIdentifier" : [
+                    { "Fn::ImportValue" : "baseSubnetA" },
+                    { "Fn::ImportValue" : "baseSubnetB" },
+                    { "Fn::ImportValue" : "baseSubnetC" }
+                ],
+                "MinSize": { "Ref" : "baseAutoscalingGroupMin" },
+                "MaxSize": { "Ref" : "baseAutoscalingGroupMax" },
+                "DesiredCapacity": { "Ref" : "baseAutoscalingGroupDesired" },
+                "LoadBalancerNames" : [ { "Ref" : "baseElb" } ],
+                "LaunchConfigurationName": { "Ref": "baseLaunchConfig" },
+                "TerminationPolicies": ["OldestInstance", "Default"],
+                "HealthCheckGracePeriod" : 600,
+                "HealthCheckType" : "ELB",
+                "MetricsCollection": [
+                    {
+                        "Granularity": "1Minute",
+                        "Metrics": [
+                            "GroupMinSize",
+                            "GroupMaxSize"
+                        ]
+                    }
+                ],
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": "base-webservers",
+                        "PropagateAtLaunch": "true"
+                    }
+                ]
+            }
+        }
+    },
+
+    "Outputs": {
+        "baseAutoScalingGroup" : {
+            "Description" : "base AutoScalingGroupVPC",
+            "Value" : { "Ref" : "baseAutoScalingGroup" },
+            "Export" : { "Name" : "baseAutoScalingGroup" }
+        }
+    }
+}

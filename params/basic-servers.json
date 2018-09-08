@@ -1,0 +1,35 @@
+[
+    {
+        "ParameterKey": "baseAmiId",
+        "ParameterValue": "<your AWS AMI id"
+    },
+    {
+        "ParameterKey": "baseInstanceType",
+        "ParameterValue": "m3.medium"
+    },
+    {
+        "ParameterKey": "baseUserdataRepo",
+        "ParameterValue": "https://raw.githubusercontent.com/5orenso/aws-ami-creation/master/server-boot/server-boot-simple-blog.sh"
+    },
+    {
+        "ParameterKey": "baseAutoscalingGroupMin",
+        "ParameterValue": "3"
+    },
+    {
+        "ParameterKey": "baseAutoscalingGroupMax",
+        "ParameterValue": "10"
+    },
+    {
+        "ParameterKey": "baseAutoscalingGroupDesired",
+        "ParameterValue": "3"
+    },
+    {
+        "ParameterKey": "baseGitRepoConfig",
+        "ParameterValue": "https://<username>:<password>@github.com/<your config repo>/config.git"
+    },
+    {
+        "ParameterKey": "baseGitRepoNodeServer",
+        "ParameterValue": "https://github.com/5orenso/simple-blog.git"
+    }
+
+]
