@@ -1,7 +1,7 @@
 [
     {
         "ParameterKey": "baseAmiId",
-        "ParameterValue": "<your AWS AMI id"
+        "ParameterValue": "<your AWS AMI id>"
     },
     {
         "ParameterKey": "baseInstanceType",
